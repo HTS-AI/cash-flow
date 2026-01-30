@@ -1,0 +1,23 @@
+{
+  "best_model": "CatBoost",
+  "model_type": "boosting",
+  "test_r2": 0.9788361472173178,
+  "test_mae": 71608.24863150305,
+  "test_rmse": 107121.7521961716,
+  "test_mape": 1.0096118747665315,
+  "train_r2": 0.9996802102866557,
+  "train_mae": 11238.091767814598,
+  "train_rmse": 13668.47687724584,
+  "train_mape": 0.14937117535517802,
+  "r2_gap": 0.020844063069337837,
+  "mape_gap": 0.8602406994113534,
+  "generalization_status": "GOOD",
+  "forecast_months": 1,
+  "training_months": 336,
+  "last_training_date": "2025-12-01",
+  "best_params": {
+    "learning_rate": 0.1,
+    "iterations": 300,
+    "depth": 4
+  }
+}

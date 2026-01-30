@@ -1,0 +1,29 @@
+# Python dependencies needed for the ML system
+# Install with: pip install -r requirements.txt
+
+# FastAPI and server
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.0.0
+python-multipart>=0.0.6
+
+# Core ML libraries
+pandas>=1.5.0
+numpy>=1.23.0
+scikit-learn>=1.2.0
+scipy>=1.9.0
+
+# ML Models
+prophet>=1.1.0
+xgboost>=1.7.0
+lightgbm>=3.3.0
+catboost>=1.1.0
+
+# Visualization
+plotly>=5.14.0
+
+# Explainability
+shap>=0.41.0
+
+# Utilities
+openpyxl>=3.0.0  # For Excel export

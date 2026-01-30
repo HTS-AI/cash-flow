@@ -1,0 +1,21 @@
+{
+  "name": "cashflow-webapp",
+  "version": "1.0.0",
+  "description": "Cash Flow Prediction Web Application - Full Stack",
+  "scripts": {
+    "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "dev": "concurrently --names \"BACKEND,FRONTEND\" --prefix-colors \"blue,green\" \"npm run server\" \"npm run client\"",
+    "server": "cd backend && python start_server.py",
+    "client": "cd frontend && npm start",
+    "build": "cd frontend && npm run build",
+    "start": "npm run dev",
+    "check-backend": "node check-backend.js"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=14.0.0",
+    "npm": ">=6.0.0"
+  }
+}
