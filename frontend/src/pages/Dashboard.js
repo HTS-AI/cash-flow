@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { cashflowAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import PredictionsPanel from '../components/PredictionsPanel';
 import ShapExplainability from '../components/ShapExplainability';
 import MonthlySpendingChart from '../components/MonthlySpendingChart';
@@ -8,7 +10,7 @@ import IncomeExpenseChart from '../components/IncomeExpenseChart';
 import NetCashflowYearChart from '../components/NetCashflowYearChart';
 import FinancialSummaryChart from '../components/FinancialSummaryChart';
 import SampleDataDisplay from '../components/SampleDataDisplay';
-import { FiRefreshCw } from 'react-icons/fi';
+import { FiRefreshCw, FiLogOut, FiUser } from 'react-icons/fi';
 
 const Dashboard = () => {
   const [loading, setLoading] = useState(true);
@@ -19,6 +21,13 @@ const Dashboard = () => {
   const [yearOverYearData, setYearOverYearData] = useState([]);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   useEffect(() => {
     loadDashboardData();
@@ -143,8 +152,15 @@ const Dashboard = () => {
       <div className="dashboard-header">
         <h1 className="dashboard-title">Finance Dashboard</h1>
         <div className="header-actions">
-          <button className="icon-button" onClick={handleRefresh} disabled={refreshing}>
+          <div className="user-info">
+            <FiUser className="user-icon" />
+            <span className="user-name">{user?.userId}</span>
+          </div>
+          <button className="icon-button" onClick={handleRefresh} disabled={refreshing} title="Refresh">
             <FiRefreshCw style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+          </button>
+          <button className="icon-button logout-button" onClick={handleLogout} title="Logout">
+            <FiLogOut />
           </button>
         </div>
       </div>
