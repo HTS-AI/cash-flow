@@ -14,7 +14,7 @@ const MonthlySpendingChart = ({ data, predictions }) => {
   if (!data || data.length === 0) {
     return (
       <div className="chart-card">
-        <div className="chart-title">Monthly Spending & Predictions</div>
+        <div className="chart-title">Monthly Cash Outflow</div>
         <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>
           No historical data available
         </div>
@@ -77,9 +77,9 @@ const MonthlySpendingChart = ({ data, predictions }) => {
   if (!hasValidData) {
     return (
       <div className="chart-card">
-        <div className="chart-title">Monthly Spending & Predictions</div>
+        <div className="chart-title">Monthly Cash Outflow</div>
         <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>
-          No valid spending data to display
+          No valid cashflow data to display
         </div>
       </div>
     );
@@ -90,7 +90,7 @@ const MonthlySpendingChart = ({ data, predictions }) => {
   return (
     <div className="chart-card">
       <div className="chart-title">
-        Monthly Spending {hasPredictions ? '& Predictions' : '(Last 12 Months)'}
+        Monthly Cash Outflow {hasPredictions ? '& Predictions' : '(Last 12 Months)'}
       </div>
       <ResponsiveContainer width="100%" height={350}>
         <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 60 }}>
@@ -138,7 +138,7 @@ const MonthlySpendingChart = ({ data, predictions }) => {
             stroke="#3b82f6"
             fillOpacity={1}
             fill="url(#colorHistorical)"
-            name="Historical Spending"
+            name="Historical Cashflow"
             connectNulls={false}
           />
           {/* Predictions - Orange */}
@@ -148,7 +148,7 @@ const MonthlySpendingChart = ({ data, predictions }) => {
             stroke="#f97316"
             fillOpacity={1}
             fill="url(#colorPredicted)"
-            name="Predicted Spending"
+            name="Predicted Cashflow"
             connectNulls={false}
           />
         </AreaChart>

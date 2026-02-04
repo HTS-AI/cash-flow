@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { cashflowAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import PredictionsPanel from '../components/PredictionsPanel';
 import ShapExplainability from '../components/ShapExplainability';
 import MonthlySpendingChart from '../components/MonthlySpendingChart';
 import ExpenseCategoriesChart from '../components/ExpenseCategoriesChart';
+import IncomeCategoriesChart from '../components/IncomeCategoriesChart';
 import IncomeExpenseChart from '../components/IncomeExpenseChart';
 import NetCashflowYearChart from '../components/NetCashflowYearChart';
 import FinancialSummaryChart from '../components/FinancialSummaryChart';
+import PredictedVsActualChart from '../components/PredictedVsActualChart';
+import ForecastAccuracyChart from '../components/ForecastAccuracyChart';
 import SampleDataDisplay from '../components/SampleDataDisplay';
-import { FiRefreshCw } from 'react-icons/fi';
+import { FiRefreshCw, FiLogOut, FiUser } from 'react-icons/fi';
 
 const Dashboard = () => {
   const [loading, setLoading] = useState(true);
@@ -19,6 +24,13 @@ const Dashboard = () => {
   const [yearOverYearData, setYearOverYearData] = useState([]);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   useEffect(() => {
     loadDashboardData();
@@ -141,10 +153,17 @@ const Dashboard = () => {
     <div className="dashboard-container">
       {/* Header */}
       <div className="dashboard-header">
-        <h1 className="dashboard-title">Finance Dashboard</h1>
+        <h1 className="dashboard-title">Cash Flow Prediction</h1>
         <div className="header-actions">
-          <button className="icon-button" onClick={handleRefresh} disabled={refreshing}>
+          <div className="user-info">
+            <FiUser className="user-icon" />
+            <span className="user-name">{user?.userId}</span>
+          </div>
+          <button className="icon-button" onClick={handleRefresh} disabled={refreshing} title="Refresh">
             <FiRefreshCw style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+          </button>
+          <button className="icon-button logout-button" onClick={handleLogout} title="Logout">
+            <FiLogOut />
           </button>
         </div>
       </div>
@@ -168,13 +187,28 @@ const Dashboard = () => {
         <ShapExplainability />
       </div>
 
-      {/* 3. All Graphical Representations */}
+      {/* 3. Predicted vs Actual Comparison */}
+      <div className="charts-container">
+        <PredictedVsActualChart />
+      </div>
+
+      {/* 4. Forecast Accuracy Tracking */}
+      <div className="charts-container">
+        <ForecastAccuracyChart />
+      </div>
+
+      {/* 5. All Graphical Representations */}
       <div className="charts-container">
         <MonthlySpendingChart data={historicalData} predictions={predictions} />
-        {summary && (
-          <ExpenseCategoriesChart expenseBreakdown={summary.expenseBreakdown} />
-        )}
       </div>
+
+      {/* 5. Category Breakdown Charts */}
+      {summary && (
+        <div className="charts-container">
+          <ExpenseCategoriesChart expenseBreakdown={summary.expenseBreakdown} />
+          <IncomeCategoriesChart incomeBreakdown={summary.incomeBreakdown} />
+        </div>
+      )}
 
       {/* Year-over-Year Comparison Charts */}
       {yearOverYearData.length > 0 && (

@@ -69,7 +69,7 @@ const FinancialSummaryChart = ({ data }) => {
   if (!data || data.length === 0) {
     return (
       <div className="chart-card">
-        <div className="chart-title">Financial Summary</div>
+        <div className="chart-title">Cash Flow Summary</div>
         <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>
           No data available
         </div>
@@ -95,7 +95,7 @@ const FinancialSummaryChart = ({ data }) => {
       {/* Header with Title and Filter */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
         <div className="chart-title" style={{ margin: 0 }}>
-          Financial Summary - {getPeriodLabel()}
+          Cash Flow Summary - {getPeriodLabel()}
         </div>
         
         {/* Year Filter */}
