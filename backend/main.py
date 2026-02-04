@@ -55,6 +55,7 @@ DATA_FILE = BACKEND_DIR / 'cashflow_prediction_1998_2025_v1.csv'
 MODEL_FILE = BACKEND_DIR / 'best_model.pkl'
 MODEL_INFO_FILE = BACKEND_DIR / 'best_model_info.json'
 PREDICTIONS_FILE = BACKEND_DIR / 'future_predictions.csv'
+PREDICTION_HISTORY_FILE = BACKEND_DIR / 'prediction_history.csv'
 
 # Initialize ML system with absolute path
 ml_system = CashFlowMLSystem(str(DATA_FILE.resolve()))
@@ -169,6 +170,27 @@ async def make_prediction(request: PredictionRequest):
         # Read predictions
         if PREDICTIONS_FILE.exists():
             predictions = read_csv_file(PREDICTIONS_FILE)
+            
+            # Save predictions to history file for future comparison
+            try:
+                predictions_df = pd.read_csv(PREDICTIONS_FILE)
+                predictions_df['predicted_on'] = datetime.now().strftime('%Y-%m-%d')
+                predictions_df['prediction_id'] = datetime.now().strftime('%Y%m%d%H%M%S')
+                
+                # Append to history file or create new one
+                if PREDICTION_HISTORY_FILE.exists():
+                    history_df = pd.read_csv(PREDICTION_HISTORY_FILE)
+                    # Remove old predictions for the same months (keep latest only)
+                    existing_months = predictions_df['month'].tolist()
+                    history_df = history_df[~history_df['month'].isin(existing_months)]
+                    history_df = pd.concat([history_df, predictions_df], ignore_index=True)
+                else:
+                    history_df = predictions_df
+                
+                history_df.to_csv(PREDICTION_HISTORY_FILE, index=False)
+            except Exception as save_err:
+                print(f"Warning: Could not save prediction history: {save_err}")
+            
             return {
                 "success": True,
                 "data": predictions
@@ -305,6 +327,18 @@ async def get_summary():
         total_rent = float(df['rent_usd'].sum())
         total_operational = float(df['operational_expense_usd'].sum())
         
+        # Calculate income breakdown by source
+        income_by_source = {}
+        if 'cash_source' in df.columns:
+            # Group by cash_source and sum cash_inflow_usd
+            income_groups = df.groupby('cash_source')['cash_inflow_usd'].sum()
+            income_by_source = {
+                'customer_payment': float(income_groups.get('customer_payment', 0)),
+                'loan_disbursement': float(income_groups.get('loan_disbursement', 0)),
+                'investment': float(income_groups.get('investment', 0)),
+                'asset_sale': float(income_groups.get('asset_sale', 0))
+            }
+        
         # Get last month data
         last_month = df.tail(30)
         last_month_inflow = float(last_month['cash_inflow_usd'].sum())
@@ -394,15 +428,20 @@ async def get_summary():
                     "salary": total_salary,
                     "rent": total_rent,
                     "operational": total_operational
-                }
+                },
+                "incomeBreakdown": income_by_source
             }
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/data/year-over-year")
-async def get_year_over_year():
-    """Get year-over-year comparison data for income, expense, and net cashflow"""
+async def get_year_over_year(month: int = 0):
+    """Get year-over-year comparison data for income, expense, and net cashflow
+    
+    Args:
+        month: Optional month filter (1-12). If 0, returns full year data.
+    """
     try:
         if not DATA_FILE.exists():
             raise HTTPException(
@@ -417,14 +456,20 @@ async def get_year_over_year():
         if 'date' in df.columns:
             df['date'] = pd.to_datetime(df['date'])
             df['year'] = df['date'].dt.year
+            df['month_num'] = df['date'].dt.month
         elif 'month' in df.columns:
             df['date'] = pd.to_datetime(df['month'] + '-01')
             df['year'] = df['date'].dt.year
+            df['month_num'] = df['date'].dt.month
         else:
             raise HTTPException(
                 status_code=500,
                 detail="No date or month column found in data"
             )
+        
+        # Filter by month if specified
+        if month > 0 and month <= 12:
+            df = df[df['month_num'] == month]
         
         # Aggregate by year
         yearly_data = df.groupby('year').agg({
@@ -449,9 +494,17 @@ async def get_year_over_year():
         year_comparison.sort(key=lambda x: x['year'])
         last_10_years = year_comparison[-10:] if len(year_comparison) > 10 else year_comparison
         
+        # Get month name for display
+        month_name = None
+        if month > 0 and month <= 12:
+            import calendar
+            month_name = calendar.month_name[month]
+        
         return {
             "success": True,
-            "data": last_10_years
+            "data": last_10_years,
+            "selectedMonth": month,
+            "monthName": month_name
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -644,6 +697,219 @@ async def get_sample_data():
                 "displayedRows": len(sample_data)
             }
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/data/predicted-vs-actual")
+async def get_predicted_vs_actual(months: int = 12):
+    """Get predicted vs actual values from saved comparison file
+    
+    Args:
+        months: Number of months to return (default 12, use 0 for all)
+    """
+    try:
+        # Path to predicted vs actual comparison file
+        PRED_VS_ACTUAL_FILE = BACKEND_DIR / 'predicted_vs_actual.csv'
+        
+        # Check if comparison file exists
+        if not PRED_VS_ACTUAL_FILE.exists():
+            return {
+                "success": False,
+                "message": "Predicted vs actual comparison not available. Please retrain the model.",
+                "data": None
+            }
+        
+        # Read comparison data
+        df = pd.read_csv(PRED_VS_ACTUAL_FILE)
+        
+        # Get model info - USE TEST METRICS FROM TRAINING (not recalculated)
+        model_name = "Unknown"
+        model_type = "Unknown"
+        test_r2 = None
+        test_mape = None
+        test_mae = None
+        
+        if MODEL_INFO_FILE.exists():
+            with open(MODEL_INFO_FILE, 'r') as f:
+                model_info = json.load(f)
+                model_name = model_info.get('best_model', 'Unknown')
+                model_type = model_info.get('model_type', 'Unknown')
+                # Get the TEST metrics from training (true predictive accuracy)
+                test_r2 = model_info.get('test_r2')
+                test_mape = model_info.get('test_mape')
+                test_mae = model_info.get('test_mae')
+        
+        # Convert to comparison data format
+        comparison_data = []
+        for _, row in df.iterrows():
+            comparison_data.append({
+                "month": row['month'],
+                "actual": float(row['actual']),
+                "predicted": float(row['predicted']),
+                "error": float(row['error']) if 'error' in df.columns else None,
+                "percentError": float(row['percent_error']) if 'percent_error' in df.columns else None
+            })
+        
+        # Sort by month
+        comparison_data.sort(key=lambda x: x['month'])
+        
+        # Total months available
+        total_available = len(comparison_data)
+        
+        # Filter by requested months (0 = all)
+        if months > 0 and len(comparison_data) > months:
+            comparison_data = comparison_data[-months:]
+        
+        # Calculate display metrics for the visible data (for reference)
+        actuals = np.array([d["actual"] for d in comparison_data])
+        predictions = np.array([d["predicted"] for d in comparison_data])
+        
+        # Calculate display MAPE (fitting accuracy on visible data)
+        display_mape = np.mean(np.abs((actuals - predictions) / actuals)) * 100
+        
+        # Calculate display MAE
+        display_mae = np.mean(np.abs(actuals - predictions))
+        
+        # Use TEST metrics from training for accuracy indicators
+        # These are the TRUE predictive metrics on unseen data
+        metrics = {
+            # Test metrics (true predictive accuracy from training)
+            "r2": round(test_r2, 4) if test_r2 is not None else None,
+            "mape": round(test_mape, 2) if test_mape is not None else round(display_mape, 2),
+            "mae": round(test_mae, 2) if test_mae is not None else round(display_mae, 2),
+            "accuracy": round(100 - min(test_mape if test_mape else display_mape, 100), 2),
+            # Display metrics (for visible data range - shown separately)
+            "displayMape": round(display_mape, 2),
+            "displayMae": round(display_mae, 2),
+            "metricsSource": "test_set" if test_r2 is not None else "calculated"
+        }
+        
+        return {
+            "success": True,
+            "data": {
+                "comparison": comparison_data,
+                "metrics": metrics,
+                "modelName": model_name,
+                "modelType": model_type,
+                "displayedMonths": len(comparison_data),
+                "totalMonthsAvailable": total_available
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/data/forecast-accuracy")
+async def get_forecast_accuracy():
+    """Compare stored predictions with actual data when it becomes available"""
+    try:
+        # Check if prediction history exists
+        if not PREDICTION_HISTORY_FILE.exists():
+            return {
+                "success": False,
+                "message": "No prediction history found. Generate predictions first.",
+                "data": None
+            }
+        
+        if not DATA_FILE.exists():
+            raise HTTPException(
+                status_code=404,
+                detail="Data file not found"
+            )
+        
+        # Read prediction history
+        history_df = pd.read_csv(PREDICTION_HISTORY_FILE)
+        
+        # Read actual data and aggregate to monthly
+        df = pd.read_csv(DATA_FILE)
+        df['date'] = pd.to_datetime(df['date'])
+        df['year_month'] = df['date'].dt.to_period('M')
+        
+        monthly_actuals = df.groupby('year_month').agg({
+            'cash_outflow_usd': 'sum'
+        }).reset_index()
+        monthly_actuals['month'] = monthly_actuals['year_month'].dt.strftime('%Y-%m')
+        monthly_actuals = monthly_actuals[['month', 'cash_outflow_usd']]
+        monthly_actuals.columns = ['month', 'actual']
+        
+        # Merge predictions with actuals
+        comparison_data = []
+        verified_count = 0
+        pending_count = 0
+        
+        for _, pred_row in history_df.iterrows():
+            pred_month = pred_row['month']
+            predicted_value = float(pred_row['predicted_cash_outflow'])
+            predicted_on = pred_row.get('predicted_on', 'Unknown')
+            
+            # Check if actual data exists for this month
+            actual_row = monthly_actuals[monthly_actuals['month'] == pred_month]
+            
+            if len(actual_row) > 0:
+                actual_value = float(actual_row['actual'].values[0])
+                error = actual_value - predicted_value
+                percent_error = (error / actual_value * 100) if actual_value != 0 else 0
+                
+                comparison_data.append({
+                    "month": pred_month,
+                    "predicted": predicted_value,
+                    "actual": actual_value,
+                    "error": error,
+                    "percentError": round(percent_error, 2),
+                    "predictedOn": predicted_on,
+                    "status": "verified"
+                })
+                verified_count += 1
+            else:
+                # Prediction for future month - actual data not yet available
+                comparison_data.append({
+                    "month": pred_month,
+                    "predicted": predicted_value,
+                    "actual": None,
+                    "error": None,
+                    "percentError": None,
+                    "predictedOn": predicted_on,
+                    "status": "pending"
+                })
+                pending_count += 1
+        
+        # Sort by month
+        comparison_data.sort(key=lambda x: x['month'])
+        
+        # Calculate accuracy metrics for verified predictions only
+        verified_data = [d for d in comparison_data if d['status'] == 'verified']
+        metrics = {}
+        
+        if len(verified_data) > 0:
+            actuals = np.array([d['actual'] for d in verified_data])
+            predictions = np.array([d['predicted'] for d in verified_data])
+            
+            mape = np.mean(np.abs((actuals - predictions) / actuals)) * 100
+            mae = np.mean(np.abs(actuals - predictions))
+            
+            # R²
+            ss_res = np.sum((actuals - predictions) ** 2)
+            ss_tot = np.sum((actuals - np.mean(actuals)) ** 2)
+            r2 = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0
+            
+            metrics = {
+                "mape": round(mape, 2),
+                "mae": round(mae, 2),
+                "r2": round(r2, 4),
+                "accuracy": round(100 - min(mape, 100), 2)
+            }
+        
+        return {
+            "success": True,
+            "data": {
+                "comparisons": comparison_data,
+                "metrics": metrics,
+                "verifiedCount": verified_count,
+                "pendingCount": pending_count,
+                "totalPredictions": len(comparison_data)
+            }
+        }
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

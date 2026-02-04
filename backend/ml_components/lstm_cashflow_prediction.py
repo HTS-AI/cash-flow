@@ -800,6 +800,49 @@ train_test_comparison = pd.DataFrame({
 train_test_comparison = train_test_comparison.sort_values('Test_R2', ascending=False)
 train_test_comparison.to_csv('train_test_comparison.csv', index=False)
 
+# Save predicted vs actual comparison for ALL months (full dataset visualization)
+try:
+    # Get all dates from feature_df
+    all_dates = feature_df['date'].values
+    all_actual = y.copy()  # All actual values (unscaled for boosting models)
+    
+    # Make predictions on the ENTIRE dataset using the full trained model
+    if best_model_info['type'] == 'prophet':
+        # For Prophet, predict on full prophet_df
+        prophet_full_pred = full_prophet_model.predict(prophet_df[['ds'] + best_model_info['regressors']])
+        all_predicted = target_scaler.inverse_transform(prophet_full_pred['yhat'].values.reshape(-1, 1)).flatten()
+        all_actual = target_scaler.inverse_transform(prophet_df['y'].values.reshape(-1, 1)).flatten()
+    else:
+        # For boosting models, predict on full scaled dataset
+        all_predicted = full_model.predict(X_scaled)
+    
+    # Create comparison dataframe with ALL months
+    pred_vs_actual_df = pd.DataFrame({
+        'date': all_dates,
+        'actual': all_actual,
+        'predicted': all_predicted
+    })
+    
+    # Sort by date
+    pred_vs_actual_df['date'] = pd.to_datetime(pred_vs_actual_df['date'])
+    pred_vs_actual_df = pred_vs_actual_df.sort_values('date').reset_index(drop=True)
+    
+    # Format date as month string
+    pred_vs_actual_df['month'] = pred_vs_actual_df['date'].dt.strftime('%Y-%m')
+    
+    # Calculate error metrics per row
+    pred_vs_actual_df['error'] = pred_vs_actual_df['actual'] - pred_vs_actual_df['predicted']
+    pred_vs_actual_df['percent_error'] = (pred_vs_actual_df['error'] / pred_vs_actual_df['actual'] * 100).round(2)
+    pred_vs_actual_df['abs_percent_error'] = pred_vs_actual_df['percent_error'].abs()
+    
+    # Save to CSV - all months
+    pred_vs_actual_df[['month', 'actual', 'predicted', 'error', 'percent_error']].to_csv('predicted_vs_actual.csv', index=False)
+    print(f"\nSaved predicted vs actual comparison to 'predicted_vs_actual.csv' ({len(pred_vs_actual_df)} months - FULL DATASET)")
+    print(f"  Date range: {pred_vs_actual_df['month'].min()} to {pred_vs_actual_df['month'].max()}")
+    print(f"  Overall MAPE: {pred_vs_actual_df['abs_percent_error'].mean():.2f}%")
+except Exception as e:
+    print(f"Warning: Could not save predicted vs actual comparison: {e}")
+
 # Save best model
 import json
 with open('best_model_info.json', 'w') as f:

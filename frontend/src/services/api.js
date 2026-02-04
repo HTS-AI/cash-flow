@@ -25,8 +25,10 @@ export const cashflowAPI = {
   // Data
   getHistoricalData: () => api.get('/data/historical'),
   getSummary: () => api.get('/data/summary'),
-  getYearOverYear: () => api.get('/data/year-over-year'),
+  getYearOverYear: (month = 0) => api.get(`/data/year-over-year?month=${month}`),
   getSampleData: () => api.get('/data/sample'),
+  getPredictedVsActual: (months = 12) => api.get(`/data/predicted-vs-actual?months=${months}`),
+  getForecastAccuracy: () => api.get('/data/forecast-accuracy'),
 
   // Training
   trainModel: (forecastMonths) => api.post('/model/train', { forecastMonths }),

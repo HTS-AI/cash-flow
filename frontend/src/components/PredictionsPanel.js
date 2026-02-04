@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { cashflowAPI } from '../services/api';
 import { FiTrendingUp, FiRefreshCw } from 'react-icons/fi';
 
@@ -6,6 +6,13 @@ const PredictionsPanel = ({ predictions, modelInfo, onGeneratePredictions, onMod
   const [forecastMonths, setForecastMonths] = useState(1);
   const [generating, setGenerating] = useState(false);
   const [training, setTraining] = useState(false);
+
+  // Sync dropdown with actual predictions count
+  useEffect(() => {
+    if (predictions && predictions.length > 0) {
+      setForecastMonths(predictions.length);
+    }
+  }, [predictions]);
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
@@ -114,24 +121,16 @@ const PredictionsPanel = ({ predictions, modelInfo, onGeneratePredictions, onMod
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid rgba(148, 163, 184, 0.1)' }}>
-                <th style={{ padding: '0.75rem', textAlign: 'left', color: '#94a3b8', fontSize: '0.875rem' }}>Month</th>
-                <th style={{ padding: '0.75rem', textAlign: 'right', color: '#94a3b8', fontSize: '0.875rem' }}>Predicted</th>
-                <th style={{ padding: '0.75rem', textAlign: 'right', color: '#94a3b8', fontSize: '0.875rem' }}>Lower 95% CI</th>
-                <th style={{ padding: '0.75rem', textAlign: 'right', color: '#94a3b8', fontSize: '0.875rem' }}>Upper 95% CI</th>
+                <th style={{ padding: '0.75rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.875rem' }}>Month</th>
+                <th style={{ padding: '0.75rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.875rem' }}>Predicted Cash Outflow</th>
               </tr>
             </thead>
             <tbody>
               {predictions.map((pred, index) => (
                 <tr key={index} style={{ borderBottom: '1px solid rgba(148, 163, 184, 0.05)' }}>
-                  <td style={{ padding: '0.75rem', color: '#e2e8f0' }}>{pred.month}</td>
-                  <td style={{ padding: '0.75rem', textAlign: 'right', color: '#3b82f6', fontWeight: '600' }}>
+                  <td style={{ padding: '0.75rem', textAlign: 'center', color: '#e2e8f0' }}>{pred.month}</td>
+                  <td style={{ padding: '0.75rem', textAlign: 'center', color: '#3b82f6', fontWeight: '600' }}>
                     {formatCurrency(parseFloat(pred.predicted_cash_outflow || 0))}
-                  </td>
-                  <td style={{ padding: '0.75rem', textAlign: 'right', color: '#10b981' }}>
-                    {formatCurrency(parseFloat(pred.lower_95 || 0))}
-                  </td>
-                  <td style={{ padding: '0.75rem', textAlign: 'right', color: '#ef4444' }}>
-                    {formatCurrency(parseFloat(pred.upper_95 || 0))}
                   </td>
                 </tr>
               ))}
