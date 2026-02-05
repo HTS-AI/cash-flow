@@ -1,39 +1,40 @@
-## --------------------
-## Build frontend (React / Vite)
-## --------------------
-FROM node:20-alpine AS frontend-build
-WORKDIR /frontend
+# Multi-stage build for Cash Flow Prediction App
 
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+# Stage 1: Build Frontend
+FROM node:18-alpine AS frontend-build
+WORKDIR /frontend
+COPY frontend/package.json ./
+RUN npm install
 COPY frontend/ ./
 RUN npm run build
 
+# Stage 2: Production Backend + Serve Frontend
+FROM python:3.10-slim
 
-## --------------------
-## Runtime (FastAPI + built UI)
-## --------------------
-FROM python:3.11-slim
 WORKDIR /app
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies (cached layer)
+# Copy requirements and install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend code + assets
-COPY . .
+# Copy backend code
+COPY backend/ ./backend/
 
-# Copy built frontend into path expected by FastAPI
-# COPY --from=frontend-build /frontend/dist ./frontend_dist
+# Copy built frontend (Create React App outputs to 'build', not 'dist')
+COPY --from=frontend-build /frontend/build ./frontend_build
 
-# Make start script executable
-RUN chmod +x ./start.sh
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PORT=8080
 
-# Cloud Run port
+# Expose port
 EXPOSE 8080
 
-# Start app
-CMD ["sh", "./start.sh"]
+# Start the application
+WORKDIR /app/backend
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
