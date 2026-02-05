@@ -7,9 +7,10 @@ Usage:
     Or: python main.py
 """
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional, List
 import os
@@ -95,11 +96,18 @@ def read_csv_file(file_path):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error reading CSV: {str(e)}")
 
+# Check if frontend build exists (for production)
+FRONTEND_BUILD_DIR = BACKEND_DIR.parent / 'frontend_build'
+
 # API Routes
 
 @app.get("/")
 async def root():
-    """Root endpoint"""
+    """Root endpoint - serves frontend in production, API info in development"""
+    if FRONTEND_BUILD_DIR.exists():
+        index_file = FRONTEND_BUILD_DIR / "index.html"
+        if index_file.exists():
+            return FileResponse(index_file)
     return {
         "message": "Cash Flow Prediction API",
         "version": "1.0.0",
@@ -912,6 +920,32 @@ async def get_forecast_accuracy():
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# Serve static frontend files in production
+# The frontend_build directory is created during Docker build
+if FRONTEND_BUILD_DIR.exists():
+    # Serve static files (JS, CSS, images, etc.)
+    static_dir = FRONTEND_BUILD_DIR / "static"
+    if static_dir.exists():
+        app.mount("/static", StaticFiles(directory=static_dir), name="static")
+    
+    # Serve the React app for all non-API routes
+    @app.get("/{full_path:path}")
+    async def serve_frontend(request: Request, full_path: str):
+        # Don't serve frontend for API routes
+        if full_path.startswith("api/") or full_path in ["docs", "redoc", "openapi.json"]:
+            raise HTTPException(status_code=404, detail="Not found")
+        
+        # Try to serve the file directly (for assets like favicon, manifest, etc.)
+        file_path = FRONTEND_BUILD_DIR / full_path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(file_path)
+        
+        # Serve index.html for all other routes (React Router handles routing)
+        index_file = FRONTEND_BUILD_DIR / "index.html"
+        if index_file.exists():
+            return FileResponse(index_file)
+        raise HTTPException(status_code=404, detail="Frontend not found")
 
 if __name__ == "__main__":
     import uvicorn
