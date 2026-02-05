@@ -27,7 +27,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Copy built frontend into path expected by FastAPI
-COPY --from=frontend-build /frontend/dist ./frontend_dist
+# COPY --from=frontend-build /frontend/dist ./frontend_dist
 
 # Make start script executable
 RUN chmod +x ./start.sh
